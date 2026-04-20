@@ -11,7 +11,7 @@ import (
 )
 
 func main() {
-	var prompt string
+	var prompt string = "Hello"
 	flag.StringVar(&prompt, "p", "", "Prompt to send to LLM")
 	flag.Parse()
 
@@ -29,10 +29,15 @@ func main() {
 		panic("Env variable OPENROUTER_API_KEY not found")
 	}
 
+	model := os.Getenv("LOCAL_MODEL")
+	if model == "" {
+		model = "anthropic/claude-haiku-4.5"
+	}
+
 	client := openai.NewClient(option.WithAPIKey(apiKey), option.WithBaseURL(baseUrl))
 	resp, err := client.Chat.Completions.New(context.Background(),
 		openai.ChatCompletionNewParams{
-			Model: "anthropic/claude-haiku-4.5",
+			Model: model,
 			Messages: []openai.ChatCompletionMessageParamUnion{
 				{
 					OfUser: &openai.ChatCompletionUserMessageParam{
@@ -52,9 +57,7 @@ func main() {
 		panic("No choices in response")
 	}
 
-	// You can use print statements as follows for debugging, they'll be visible when running tests.
 	fmt.Fprintln(os.Stderr, "Logs from your program will appear here!")
 
-	// TODO: Uncomment the line below to pass the first stage
-	// fmt.Print(resp.Choices[0].Message.Content)
+	fmt.Print(resp.Choices[0].Message.Content)
 }
