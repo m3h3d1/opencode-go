@@ -2,6 +2,7 @@ package main
 
 import (
 	"context"
+	"encoding/json"
 	"flag"
 	"fmt"
 	"os"
@@ -9,6 +10,10 @@ import (
 	"github.com/openai/openai-go/v3"
 	"github.com/openai/openai-go/v3/option"
 )
+
+type ReadArgs struct {
+	FilePath string `json:"file_path"`
+}
 
 func main() {
 	var prompt string = "Hello"
@@ -73,7 +78,28 @@ func main() {
 		panic("No choices in response")
 	}
 
-	fmt.Fprintln(os.Stderr, "Logs from your program will appear here!")
+	message := resp.Choices[0].Message
 
-	fmt.Print(resp.Choices[0].Message.Content)
+	if len(message.ToolCalls) > 0 {
+		toolCall := message.ToolCalls[0]
+
+		if toolCall.Function.Name == "Read" {
+			var args ReadArgs
+			err := json.Unmarshal([]byte(toolCall.Function.Arguments), &args)
+			if err != nil {
+				fmt.Fprintf(os.Stderr, "error parsing tool arguments: %v\n", err)
+				os.Exit(1)
+			}
+
+			content, err := os.ReadFile(args.FilePath)
+			if err != nil {
+				fmt.Fprintf(os.Stderr, "error reading file %s: %v\n", args.FilePath, err)
+				os.Exit(1)
+			}
+
+			fmt.Print(string(content))
+		}
+	} else {
+		fmt.Print(message.Content)
+	}
 }
