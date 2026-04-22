@@ -15,6 +15,11 @@ type ReadArgs struct {
 	FilePath string `json:"file_path"`
 }
 
+type WriteArgs struct {
+	FilePath string `json:"file_path"`
+	Content  string `json:"content"`
+}
+
 func main() {
 	var prompt string = "Hello"
 	flag.StringVar(&prompt, "p", "", "Prompt to send to LLM")
@@ -62,7 +67,7 @@ func main() {
 				),
 				Tools: []openai.ChatCompletionToolUnionParam{
 					openai.ChatCompletionFunctionTool(openai.FunctionDefinitionParam{
-						Name: "Read",
+						Name:        "Read",
 						Description: openai.String("Read and return the contents of a file"),
 						Parameters: openai.FunctionParameters{
 							"type": "object",
@@ -73,6 +78,24 @@ func main() {
 								},
 							},
 							"required": []string{"file_path"},
+						},
+					}),
+					openai.ChatCompletionFunctionTool(openai.FunctionDefinitionParam{
+						Name:        "Write",
+						Description: openai.String("Write content to a file"),
+						Parameters: openai.FunctionParameters{
+							"type": "object",
+							"properties": map[string]any{
+								"file_path": map[string]any{
+									"type":        "string",
+									"description": "The path of the file to write to",
+								},
+								"content": map[string]any{
+									"type":        "string",
+									"description": "The content to write to the file",
+								},
+							},
+							"required": []string{"file_path", "content"},
 						},
 					}),
 				},
@@ -135,6 +158,28 @@ func main() {
 						ToolCallID: tc.ID,
 						Content: openai.ChatCompletionToolMessageParamContentUnion{
 							OfString: openai.String(string(fileContent)),
+						},
+					},
+				})
+			} else if tc.Function.Name == "Write" {
+				var args WriteArgs
+				err := json.Unmarshal([]byte(tc.Function.Arguments), &args)
+				if err != nil {
+					fmt.Fprintf(os.Stderr, "error parsing tool arguments: %v\n", err)
+					os.Exit(1)
+				}
+
+				err = os.WriteFile(args.FilePath, []byte(args.Content), 0644)
+				if err != nil {
+					fmt.Fprintf(os.Stderr, "error writing file %s: %v\n", args.FilePath, err)
+					os.Exit(1)
+				}
+
+				messages = append(messages, openai.ChatCompletionMessageParamUnion{
+					OfTool: &openai.ChatCompletionToolMessageParam{
+						ToolCallID: tc.ID,
+						Content: openai.ChatCompletionToolMessageParamContentUnion{
+							OfString: openai.String("File written successfully"),
 						},
 					},
 				})
