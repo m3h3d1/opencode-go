@@ -6,6 +6,7 @@ import (
 	"flag"
 	"fmt"
 	"os"
+	"os/exec"
 
 	"github.com/openai/openai-go/v3"
 	"github.com/openai/openai-go/v3/option"
@@ -98,6 +99,20 @@ func main() {
 							"required": []string{"file_path", "content"},
 						},
 					}),
+					openai.ChatCompletionFunctionTool(openai.FunctionDefinitionParam{
+						Name:        "Bash",
+						Description: openai.String("Execute a shell command"),
+						Parameters: openai.FunctionParameters{
+							"type": "object",
+							"properties": map[string]any{
+								"command": map[string]any{
+									"type":        "string",
+									"description": "The command to execute",
+								},
+							},
+							"required": []string{"command"},
+						},
+					}),
 				},
 			},
 		)
@@ -180,6 +195,32 @@ func main() {
 						ToolCallID: tc.ID,
 						Content: openai.ChatCompletionToolMessageParamContentUnion{
 							OfString: openai.String("File written successfully"),
+						},
+					},
+				})
+			} else if tc.Function.Name == "Bash" {
+				var args struct {
+					Command string `json:"command"`
+				}
+				err := json.Unmarshal([]byte(tc.Function.Arguments), &args)
+				if err != nil {
+					fmt.Fprintf(os.Stderr, "error parsing tool arguments: %v\n", err)
+					os.Exit(1)
+				}
+
+				cmd := exec.Command("sh", "-c", args.Command)
+				output, err := cmd.Output()
+
+				result := string(output)
+				if err != nil {
+					result = fmt.Sprintf("Error: %v", err)
+				}
+
+				messages = append(messages, openai.ChatCompletionMessageParamUnion{
+					OfTool: &openai.ChatCompletionToolMessageParam{
+						ToolCallID: tc.ID,
+						Content: openai.ChatCompletionToolMessageParamContentUnion{
+							OfString: openai.String(result),
 						},
 					},
 				})
